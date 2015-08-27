@@ -1,0 +1,142 @@
+#!/usr/bin/perl
+
+#################################################################################
+# Authors: Eddie Romito and Andrew Sovern
+# Name: Parse-Airodump.pl
+# Date: 04/23/2014
+# Purpose: continually sniffs for non-associated clients using wireshark
+#	   and displays findings every 10 seconds. A text file called
+#          airodump.txt is created in the current directory.
+#	  
+#
+# Requirements: tshark must be installed
+#		wireless card must be in monitor mode (mon0)
+#		must have root privledges 
+#		Term::ANSIScreen must be installed
+###################################################################################
+use warnings;
+use strict;
+use Term::ANSIScreen qw(cls);
+use POSIX;
+
+while (1)
+{
+	# collect wireless traffic for 10 seconds
+	`sudo tshark -i mon0 -f 'subtype probereq' -a duration:10 2>/dev/null | grep SSID= | sed -n -e 's/^.*SSID=//p' | tee -a airodump.txt`;
+
+	open IN, "airodump.txt" or die "Cannot read $!";
+
+	my %freq;
+
+	while (<IN>)
+	{
+		my $SSID = $_;
+
+		# remove any empty SSIDs or SSIDs with spaces at beginning or end
+		$SSID =~ s/^\s+//;
+		$SSID =~ s/\s+$//;
+
+		# some SSIDs have information after them, remove this information and extract SSID only
+		if ($SSID =~ /^(.+?),/)
+		{		
+			$SSID = $1;
+		}
+		
+
+		# some devices simply broadcast for APs, remove these requests
+		if ($SSID eq "Broadcast" | $SSID =~ /(packets)/ | $SSID !~ /\w+/ |  $SSID =~ /(Malformed)/ | $SSID =~ /[&{};]/)
+		{
+			next;
+		}
+
+		# if hash already exists, increment it by one
+		if (exists $freq{ $SSID })
+		{
+			$freq{ $SSID }++;
+		}
+
+		# if hash doesn't exist, create it and set its value to one
+		else
+		{
+			$freq{ $SSID } = 1;
+		}
+	}
+
+	# get all of the keys in the hash, assign them to array
+	my @SSIDs = keys(%freq);
+
+	# sort array alphabetically
+	@SSIDs = sort {lc $a cmp lc $b } @SSIDs;
+
+	# break large sorted array down into three
+	# smaller arrays for column format printing
+	my $size = scalar @SSIDs;
+	my $element_count = ($size/3);
+	
+	# indicates how many 'extra' (not divisible by three)
+ 	# SSIDs are left after the division.
+	$element_count = floor($element_count); # remove decimal places present
+	my $extra = $size % 3;
+
+	my @arr1;
+	my @arr2;
+	my @arr3;
+	
+	# assign the first number of elements in the SSIDs
+	# array into the newly created array
+	for (my $s = 0; $s < $element_count; $s++)
+	{
+		my $value = shift @SSIDs;
+		push (@arr1, $value);
+	}
+
+	# assign the next number of elements in the SSIDs
+	# array into the newly created array
+	for (my $s = 0; $s < $element_count; $s++)
+	{
+		my $value = shift @SSIDs;
+		push (@arr2, $value);
+	}
+	
+	# all remaining elements are placed into a third array
+	# this array may contain 1 or 2 more elements
+	# than array 1 and 2
+	@arr3 = @SSIDs;  
+	
+	#clear the screen
+	my $clear_screen = cls();
+	print $clear_screen;
+
+	# iterate through all sub-SSID arrays and print out their values
+	# in a column format
+	for (my $i = 0; $i < $element_count; $i++)
+	{	
+		# format printing for columns
+		printf ("%-35s", "$arr1[$i]");
+		printf ("%-35s", "$arr2[$i]");
+		printf ("%-35s", "$arr3[$i]");
+		print "\n";
+	}
+	
+	# if there were extra SSIDs, they will exist within the third array
+	my $Arr_size = scalar @arr3; 
+
+	# if there is one extra element, print it in the third column
+	if ($extra == 1)
+	{
+		printf ("%-70s", " ");
+		printf ("%-35s", "$arr3[$Arr_size - 1]");
+		print "\n";
+	}
+	
+	# if there are two extra elements, print them in the third column
+	if ($extra == 2)
+	{
+		printf ("%-70s", " ");
+		printf ("%-35s", "$arr3[$Arr_size - 2]");
+		print "\n";
+		printf ("%-70s", " ");
+		printf ("%-35s", "$arr3[$Arr_size - 1]");
+		print "\n";
+	}
+}

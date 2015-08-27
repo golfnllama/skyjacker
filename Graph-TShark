@@ -1,0 +1,118 @@
+#!/usr/bin/perl
+
+#################################################################################
+# Authors: Eddie Romito and Andrew Sovern
+# Name: Graph-Airodump.pl
+# Date: 04/14/2014
+# Purpose: creates graph of the top ten probed SSID. Creates .PNG image called
+#	   SSID_Graph.png in the current directory
+#
+# Requirements: airodump.txt must be present in current directory
+#		GD::Graph module is required 
+###################################################################################
+use warnings;
+use strict;
+
+use GD::Graph::bars; # requires installation of GD::Graph
+use GD::Graph::colour; # requires installaiton of GD::Graph
+
+open IN, "airodump.txt" or die "Cannot read $!";
+
+my %freq;
+
+while (<IN>)
+{
+	my $SSID = $_;
+
+	# remove any empty SSIDs or SSIDs with spaces at beginning or end
+	$SSID =~ s/^\s+//;
+	$SSID =~ s/\s+$//;
+
+	# some SSIDs have information after them, remove this information and extract SSID only
+	if ($SSID =~ /^(.+?),/)
+	{		
+		$SSID = $1;
+	}
+	
+
+	# some devices simply broadcast for APs, remove these requests
+	if ($SSID eq "Broadcast")
+	{
+		next;
+	}
+
+	# if hash already exists, increment it by one
+	if (exists $freq{ $SSID })
+	{
+		$freq{ $SSID }++;
+	}
+
+	# if hash doesn't exist, create it and set its value to one
+	else
+	{
+		$freq{ $SSID } = 1;
+	}
+}
+
+# get all of the keys in the hash, assign them to array
+my @SSIDs = keys(%freq);
+
+my @new; # array to store newly sorted values
+my $count = 0;
+
+# sort the hash of SSIDs, take the top 10 (most occurences) sorting out 
+# any having to do with rit, and assign them to an array
+foreach my $value (sort {$freq{$b} <=> $freq{$a}} keys %freq)
+{
+	if (index($value, 'rit') == -1)
+	{
+ 		push (@new, $value);
+
+		$count++;
+	} 
+
+	if ($count > 9)
+	{
+		last;
+	}
+}
+
+
+#########################
+#### CREATE GRAPH #######
+#########################
+my @SSIDS;
+my @count;
+
+# create array of SSIDS from the sorted array
+foreach (@new)
+{	
+ 	push (@SSIDS, $_);	
+}
+
+# create array of numeric values from hash
+foreach (@SSIDs)
+{
+ 	push (@count, $freq{ $_ });	
+}
+
+my @data = (\@SSIDS, \@count);
+ 
+my $graph = GD::Graph::bars->new(1024, 768);
+
+$graph->set( 
+             y_label => 'Count',
+             title   => 'SSIDS Found',
+	     transparent => 0,
+	         bgclr   => 'white',
+) or warn $graph->error;
+
+my $image = $graph->plot(\@data) or die $graph->error();
+
+my $fileName = "SSID_Graph.png";
+
+# create a file of graph in same directory as script
+open(IMG, ">$fileName") or die $!;
+binmode IMG;
+print IMG $image->png;
+close IMG;

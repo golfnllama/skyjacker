@@ -2,8 +2,8 @@
 
 #################################################################################
 # Authors: Eddie Romito and Andrew Sovern
-# Name: Parse-Airodump.pl
-# Date: 04/23/2014
+# Name: skyjacker_mac.pl
+# Date: 11/18/2015
 # Purpose: continually sniffs for non-associated clients using wireshark
 #	   and displays findings every 10 seconds. A text file called
 #          airodump.txt is created in the current directory.
@@ -22,7 +22,7 @@ use POSIX;
 while (1)
 {
 	# collect wireless traffic for 10 seconds
-	`sudo tshark -i wlan2 -I -f 'subtype probereq' -n -a duration:10 2>/dev/null |  awk '{print \$3, \$13;}' | tee -a airodump.txt`;
+	`sudo tshark -i wlan0 -I -f 'subtype probereq' -n -a duration:10 2>/dev/null |  awk '{print \$3, \$13, \$14, \$15, \$16, \$17, \$18;}' | tee -a airodump.txt`;
 
 	open IN, "airodump.txt" or die "Cannot read $!";
 
@@ -38,12 +38,9 @@ while (1)
 		# remove any empty SSIDs or SSIDs with spaces at beginning or end
 		$line =~ /(^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2}))\sSSID=(.*)/;
 		$MAC = $1;
-		print $MAC;
 		$SSID = $4;
-		print $SSID;
 		$SSID =~ s/^\s+//;
 		$SSID =~ s/\s+$//;
-		$SSID = $SSID . ", " . $MAC;
 
 		# some SSIDs have information after them, remove this information and extract SSID only
 		if ($SSID =~ /^(.+?),/)
@@ -57,6 +54,8 @@ while (1)
 		{
 			next;
 		}
+
+		$SSID = "\"" . $SSID . "\"" . "," . "\"" . $MAC . "\"";
 
 		# if hash already exists, increment it by one
 		if (exists $freq{ $SSID })
@@ -80,16 +79,15 @@ while (1)
 	# break large sorted array down into three
 	# smaller arrays for column format printing
 	my $size = scalar @SSIDs;
-	my $element_count = ($size/3);
+	my $element_count = ($size/2);
 	
 	# indicates how many 'extra' (not divisible by three)
  	# SSIDs are left after the division.
 	$element_count = floor($element_count); # remove decimal places present
-	my $extra = $size % 3;
+	my $extra = $size % 2;
 
 	my @arr1;
 	my @arr2;
-	my @arr3;
 	
 	# assign the first number of elements in the SSIDs
 	# array into the newly created array
@@ -105,12 +103,7 @@ while (1)
 	{
 		my $value = shift @SSIDs;
 		push (@arr2, $value);
-	}
-	
-	# all remaining elements are placed into a third array
-	# this array may contain 1 or 2 more elements
-	# than array 1 and 2
-	@arr3 = @SSIDs;  
+	}  
 	
 	#clear the screen
 	my $clear_screen = cls();
@@ -121,31 +114,9 @@ while (1)
 	for (my $i = 0; $i < $element_count; $i++)
 	{	
 		# format printing for columns
-		printf ("%-35s", "$arr1[$i]");
-		printf ("%-35s", "$arr2[$i]");
-		printf ("%-35s", "$arr3[$i]");
+		printf ("%-45s", "$arr1[$i]");
+		printf ("%-45s", "$arr2[$i]");
 		print "\n";
 	}
-	
-	# if there were extra SSIDs, they will exist within the third array
-	my $Arr_size = scalar @arr3; 
 
-	# if there is one extra element, print it in the third column
-	if ($extra == 1)
-	{
-		printf ("%-70s", " ");
-		printf ("%-35s", "$arr3[$Arr_size - 1]");
-		print "\n";
-	}
-	
-	# if there are two extra elements, print them in the third column
-	if ($extra == 2)
-	{
-		printf ("%-70s", " ");
-		printf ("%-35s", "$arr3[$Arr_size - 2]");
-		print "\n";
-		printf ("%-70s", " ");
-		printf ("%-35s", "$arr3[$Arr_size - 1]");
-		print "\n";
-	}
 }
